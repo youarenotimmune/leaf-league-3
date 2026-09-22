@@ -1,5 +1,5 @@
 const VERSION = 'leaf-league-iii-sw-v1';
-const CORE = ['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
+const CORE = ['./','./index.html','./manifest.webmanifest'];
 
 self.addEventListener('install', event => {
   self.skipWaiting();
