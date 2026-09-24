@@ -178,7 +178,7 @@ button.secondary{background:#475569} button.good{background:var(--green)} button
 
 <script>
 (() => {
-const APP_VERSION = "LL3-2026-09-25a";
+const APP_VERSION = "LL3-2026-09-25b";
 const SECTIONS = {
   "Probit Conference": { teams: ["The IV League","InshaAllah Offense","Johnny Football","The Stochastics","Dickey Fullers","Big Data Energy"], championship: "Probit Conference Championship" },
   "ARIMA Conference": { teams: ["The Standard Errors","The Shepherds","Tobit Tabahi","Minimum Likelihood","Meow Meow","The Wolves"], championship: "ARIMA Conference Championship" }
@@ -233,8 +233,90 @@ function loadState(){
     return {current:null, games:{}, results:[], gameIndex:{}, ui:{screen:"match", teamView:"A", minusMode:false}, playoffStart:null, playoffFormat:"standard"};
   }
 }
-function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); $("saveStatus").textContent = "Saved"; }
-function dirty(){ $("saveStatus").textContent = "Saving…"; setTimeout(save, 0); }
+const IDB_NAME = "leaf_league_iii_state_db";
+const IDB_STORE = "league";
+const IDB_KEY = "state";
+
+function openStateDB(){
+  return new Promise((resolve,reject) => {
+    if(!("indexedDB" in window)) return reject(new Error("IndexedDB unavailable"));
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if(!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error("IndexedDB open failed"));
+  });
+}
+
+async function saveStateToIDB(snapshot){
+  try{
+    const db = await openStateDB();
+    await new Promise((resolve,reject) => {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).put(snapshot, IDB_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error("IndexedDB write failed"));
+      tx.onabort = () => reject(tx.error || new Error("IndexedDB write aborted"));
+    });
+    db.close();
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
+async function loadStateFromIDB(){
+  try{
+    const db = await openStateDB();
+    const value = await new Promise((resolve,reject) => {
+      const tx = db.transaction(IDB_STORE, "readonly");
+      const req = tx.objectStore(IDB_STORE).get(IDB_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error || new Error("IndexedDB read failed"));
+    });
+    db.close();
+    return value;
+  }catch(e){
+    return null;
+  }
+}
+
+function save(){
+  state._savedAt = Date.now();
+  const snapshot = JSON.parse(JSON.stringify(state));
+  let localSaved = false;
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+    localSaved = true;
+  }catch(e){}
+  saveStateToIDB(snapshot).then(idbSaved => {
+    if($("saveStatus")) $("saveStatus").textContent = (localSaved || idbSaved) ? "Saved" : "Save failed";
+  });
+  if($("saveStatus")) $("saveStatus").textContent = localSaved ? "Saved" : "Saving…";
+}
+function dirty(){ if($("saveStatus")) $("saveStatus").textContent = "Saving…"; save(); }
+
+function hasLeagueProgress(s){
+  return !!(s && (
+    (Array.isArray(s.results) && s.results.length) ||
+    (s.games && Object.keys(s.games).length) ||
+    s.playoffStart
+  ));
+}
+
+async function recoverNewerStateFromIDB(){
+  const backup = await loadStateFromIDB();
+  if(!backup) return;
+  const localTime = Number(state?._savedAt || 0);
+  const backupTime = Number(backup?._savedAt || 0);
+  if((backupTime > localTime) || (!hasLeagueProgress(state) && hasLeagueProgress(backup))){
+    state = normalizeState(backup);
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+    render();
+  }
+}
 
 function normalizeState(s){
   s = migrateLegacyTeamNames(s || {});
@@ -889,8 +971,15 @@ if("serviceWorker" in navigator){
   });
 }
 
+if(navigator.storage && navigator.storage.persist){
+  navigator.storage.persist().catch(() => false);
+}
+window.addEventListener("pagehide", () => save());
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "hidden") save(); });
+
 if(state.current && state.games[state.current]) render();
 else { restoreByNumber(); render(); }
+recoverNewerStateFromIDB();
 })();
 </script>
 </body>
