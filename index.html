@@ -178,7 +178,7 @@ button.secondary{background:#475569} button.good{background:var(--green)} button
 
 <script>
 (() => {
-const APP_VERSION = "LL3-2026-09-25b";
+const APP_VERSION = "LL3-2026-09-25c";
 const SECTIONS = {
   "Probit Conference": { teams: ["The IV League","InshaAllah Offense","Johnny Football","The Stochastics","Dickey Fullers","Big Data Energy"], championship: "Probit Conference Championship" },
   "ARIMA Conference": { teams: ["The Standard Errors","The Shepherds","Tobit Tabahi","Minimum Likelihood","Meow Meow","The Wolves"], championship: "ARIMA Conference Championship" }
@@ -521,6 +521,13 @@ function restoreByNumber(){
   const id = state.gameIndex[String(n)];
   if(id && state.games[id]){ state.current = id; render(); dirty(); return true; }
   if(state.playoffStart && n >= state.playoffStart && loadAutoPlayoffGame(n)){ render(); dirty(); return true; }
+
+  // Empty game slot: clear the previous matchup so a new game always starts blank.
+  state.current = null;
+  setMatchSelections("", "");
+  $("walkoverSelect").value = "none";
+  render();
+  dirty();
   return false;
 }
 
