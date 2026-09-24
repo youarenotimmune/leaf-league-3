@@ -178,10 +178,10 @@ button.secondary{background:#475569} button.good{background:var(--green)} button
 
 <script>
 (() => {
-const APP_VERSION = "LL3-2026-09-22a";
+const APP_VERSION = "LL3-2026-09-25a";
 const SECTIONS = {
-  "Probit Conference": { teams: ["The IV League","InshaAllah Offense","Johnny Football","The Stochastics","Dickey Fullers","Group 8"], championship: "Probit Conference Championship" },
-  "ARIMA Conference": { teams: ["The Standard Errors","The Shepherds","Group 7","Group 11","Group 9","Group 10"], championship: "ARIMA Conference Championship" }
+  "Probit Conference": { teams: ["The IV League","InshaAllah Offense","Johnny Football","The Stochastics","Dickey Fullers","Big Data Energy"], championship: "Probit Conference Championship" },
+  "ARIMA Conference": { teams: ["The Standard Errors","The Shepherds","Tobit Tabahi","Minimum Likelihood","Meow Meow","The Wolves"], championship: "ARIMA Conference Championship" }
 };
 const ROSTERS = {
   "The IV League":["Usman Shakeel","Muhammad Ali Nabeel","Haris Navaid","Ruqaia Wajid Peracha"],
@@ -189,13 +189,13 @@ const ROSTERS = {
   "Johnny Football":["Muhammad Taha Naeem","Muhammad Taha Sarfaraz","Hassaan Tayyab"],
   "The Stochastics":["Mehar Ali","Rameen Sheikh","Abeeha Ali"],
   "Dickey Fullers":["Ahmed Mohammad Iqbal","Ibrahim Arif Alvi","Muhammad Hamza Moin","Fatima Jamil"],
-  "Group 8":["Mustapha Afsar","Muskan Khan","Eesha Kiyani","Ezan Aneel"],
+  "Big Data Energy":["Mustapha Afsar","Muskan Khan","Eesha Kiyani","Ezan Aneel"],
   "The Standard Errors":["Hania Hashmi","Khadeeja Syedah","Hamza Iqbal","Farheen Zubair"],
   "The Shepherds":["Rehan Ullah Khan","Mughees Faisal","Shaheer Majid","Saad Ur Rehman"],
-  "Group 7":["Zulekha Shoib","Shavan Kumar","Sneha Lohana","Muhammad Musa"],
-  "Group 11":["Hanzla Ahmed","Muhammad Burhan","Mustafa Amin","Nisar Ahmed"],
-  "Group 9":["Mian Ahmad Umar","Pirah Nazeer Kalhoro","Alena Abbas","Haleema Iftkhar"],
-  "Group 10":["Zaid Saim","Muhammad Daniyaal","Rohab Ahmed Zafar","Waleed Rehman"]
+  "Tobit Tabahi":["Zulekha Shoib","Shavan Kumar","Sneha Lohana","Muhammad Musa"],
+  "Minimum Likelihood":["Hanzla Ahmed","Muhammad Burhan","Mustafa Amin","Nisar Ahmed"],
+  "Meow Meow":["Mian Ahmad Umar","Pirah Nazeer Kalhoro","Alena Abbas","Haleema Iftkhar"],
+  "The Wolves":["Zaid Saim","Muhammad Daniyaal","Rohab Ahmed Zafar","Waleed Rehman"]
 };
 const STATS = ["catches","drops","touchdowns","interceptions","blocks"];
 const STORAGE_KEY = "leaf_league_iii_mobile_v1";
@@ -205,10 +205,25 @@ let state = loadState();
 function vibrate(ms=10){ try { if (navigator.vibrate) navigator.vibrate(ms); } catch(e) {} }
 function blankStats(){ return {catches:0,drops:0,touchdowns:0,interceptions:0,blocks:0,dnp:false,history:[]}; }
 function esc(str){ return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[s])); }
+const LEGACY_TEAM_RENAMES = {
+  "Group 7":"Tobit Tabahi",
+  "Group 8":"Big Data Energy",
+  "Group 9":"Meow Meow",
+  "Group 10":"The Wolves",
+  "Group 11":"Minimum Likelihood"
+};
+function migrateLegacyTeamNames(s){
+  let json = JSON.stringify(s || {});
+  for(const [oldName,newName] of Object.entries(LEGACY_TEAM_RENAMES)){
+    json = json.split(oldName).join(newName);
+  }
+  return JSON.parse(json);
+}
+
 function loadState(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    const s = raw ? JSON.parse(raw) : {};
+    const s = migrateLegacyTeamNames(raw ? JSON.parse(raw) : {});
     s.current ??= null; s.games ??= {}; s.results ??= []; s.gameIndex ??= {};
     s.ui ??= {screen:"match", teamView:"A", minusMode:false};
     s.playoffStart ??= null;
@@ -222,7 +237,7 @@ function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); $("sa
 function dirty(){ $("saveStatus").textContent = "Saving…"; setTimeout(save, 0); }
 
 function normalizeState(s){
-  s = s || {};
+  s = migrateLegacyTeamNames(s || {});
   s.current ??= null; s.games ??= {}; s.results ??= []; s.gameIndex ??= {};
   s.ui ??= {screen:"match", teamView:"A", minusMode:false};
   s.playoffStart ??= null;
