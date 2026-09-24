@@ -178,7 +178,7 @@ button.secondary{background:#475569} button.good{background:var(--green)} button
 
 <script>
 (() => {
-const APP_VERSION = "LL3-2026-09-25c";
+const APP_VERSION = "LL3-2026-09-25d";
 const SECTIONS = {
   "Probit Conference": { teams: ["The IV League","InshaAllah Offense","Johnny Football","The Stochastics","Dickey Fullers","Big Data Energy"], championship: "Probit Conference Championship" },
   "ARIMA Conference": { teams: ["The Standard Errors","The Shepherds","Tobit Tabahi","Minimum Likelihood","Meow Meow","The Wolves"], championship: "ARIMA Conference Championship" }
@@ -236,6 +236,7 @@ function loadState(){
 const IDB_NAME = "leaf_league_iii_state_db";
 const IDB_STORE = "league";
 const IDB_KEY = "state";
+let idbSaveQueue = Promise.resolve();
 
 function openStateDB(){
   return new Promise((resolve,reject) => {
@@ -291,9 +292,13 @@ function save(){
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
     localSaved = true;
   }catch(e){}
-  saveStateToIDB(snapshot).then(idbSaved => {
-    if($("saveStatus")) $("saveStatus").textContent = (localSaved || idbSaved) ? "Saved" : "Save failed";
-  });
+  idbSaveQueue = idbSaveQueue
+    .catch(() => false)
+    .then(() => saveStateToIDB(snapshot))
+    .then(idbSaved => {
+      if($("saveStatus")) $("saveStatus").textContent = (localSaved || idbSaved) ? "Saved" : "Save failed";
+      return idbSaved;
+    });
   if($("saveStatus")) $("saveStatus").textContent = localSaved ? "Saved" : "Saving…";
 }
 function dirty(){ if($("saveStatus")) $("saveStatus").textContent = "Saving…"; save(); }
@@ -307,15 +312,14 @@ function hasLeagueProgress(s){
 }
 
 async function recoverNewerStateFromIDB(){
+  // localStorage is the primary store. IndexedDB is recovery-only.
+  // Never let a stale backup overwrite valid league progress.
+  if(hasLeagueProgress(state)) return;
   const backup = await loadStateFromIDB();
-  if(!backup) return;
-  const localTime = Number(state?._savedAt || 0);
-  const backupTime = Number(backup?._savedAt || 0);
-  if((backupTime > localTime) || (!hasLeagueProgress(state) && hasLeagueProgress(backup))){
-    state = normalizeState(backup);
-    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
-    render();
-  }
+  if(!hasLeagueProgress(backup)) return;
+  state = normalizeState(backup);
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+  render();
 }
 
 function normalizeState(s){
@@ -523,11 +527,11 @@ function restoreByNumber(){
   if(state.playoffStart && n >= state.playoffStart && loadAutoPlayoffGame(n)){ render(); dirty(); return true; }
 
   // Empty game slot: clear the previous matchup so a new game always starts blank.
+  // Do not save here: this function also runs during startup, before backup recovery.
   state.current = null;
   setMatchSelections("", "");
   $("walkoverSelect").value = "none";
   render();
-  dirty();
   return false;
 }
 
