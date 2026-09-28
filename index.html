@@ -178,7 +178,7 @@ button.secondary{background:#475569} button.good{background:var(--green)} button
 
 <script>
 (() => {
-const APP_VERSION = "LL3-2026-09-25d";
+const APP_VERSION = "LL3-2026-09-28a";
 const SECTIONS = {
   "Probit Conference": { teams: ["The IV League","InshaAllah Offense","Johnny Football","The Stochastics","Dickey Fullers","Big Data Energy"], championship: "Probit Conference Championship" },
   "ARIMA Conference": { teams: ["The Standard Errors","The Shepherds","Tobit Tabahi","Minimum Likelihood","Meow Meow","The Wolves"], championship: "ARIMA Conference Championship" }
@@ -520,23 +520,27 @@ function loadAutoPlayoffGame(n){
   return true;
 }
 
-function restoreByNumber(){
+function restoreByNumber(clearEmpty=true){
   const n = currentGameNo();
   const id = state.gameIndex[String(n)];
   if(id && state.games[id]){ state.current = id; render(); dirty(); return true; }
   if(state.playoffStart && n >= state.playoffStart && loadAutoPlayoffGame(n)){ render(); dirty(); return true; }
 
-  // Empty game slot: clear the previous matchup so a new game always starts blank.
-  // Do not save here: this function also runs during startup, before backup recovery.
-  state.current = null;
-  setMatchSelections("", "");
-  $("walkoverSelect").value = "none";
-  render();
+  if(clearEmpty){
+    // Empty game slot: clear the previous matchup so a new game always starts blank.
+    // Do not save here: this function also runs during startup, before backup recovery.
+    state.current = null;
+    setMatchSelections("", "");
+    $("walkoverSelect").value = "none";
+    render();
+  }
   return false;
 }
 
 function loadGame(){
-  if(restoreByNumber()) return;
+  // If this game number is already saved, restore it. For a new game number,
+  // preserve the teams the user just selected.
+  if(restoreByNumber(false)) return;
   const n = currentGameNo();
   if(state.playoffStart && n >= state.playoffStart && loadAutoPlayoffGame(n)){ render(); dirty(); return; }
   const a = $("teamA").value, b = $("teamB").value;
