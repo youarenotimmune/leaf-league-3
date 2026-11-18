@@ -69,14 +69,7 @@ button.secondary{background:#475569} button.good{background:var(--green)} button
         <div><label>Team A</label><select id="teamA"></select></div>
         <div><label>Team B</label><select id="teamB"></select></div>
       </div>
-      <div style="margin-top:8px">
-        <label>Playoff Format</label>
-        <select id="playoffFormatSelect">
-          <option value="standard">Standard Semifinals (1 vs 4, 2 vs 3)</option>
-          <option value="qualifier">Qualifier / Eliminator</option>
-        </select>
-        <div class="hint" style="margin-top:5px">You can change this until you complete the group stage.</div>
-      </div>
+      <div id="rematchNotice" class="hint hidden" role="status" aria-live="polite" style="margin-top:8px;padding:10px;border-radius:12px;background:#fef3c7;color:#92400e"></div>
       <div class="row wrap" style="margin-top:10px">
         <button id="loadBtn" class="good grow">Load / Start Game</button>
         <button id="swapBtn" class="secondary">Swap</button>
@@ -117,14 +110,14 @@ button.secondary{background:#475569} button.good{background:var(--green)} button
   </section>
 
   <section id="screen-standings" class="hidden">
-    <div class="card"><label>Conference</label><select id="standingsSectionFilter"><option value="Probit Conference">Probit Conference</option><option value="ARIMA Conference">ARIMA Conference</option></select></div>
+    <div class="card"><div class="hint">Overall standings · Top four qualify for the semifinals.</div></div>
     <div id="standingsWrap"></div>
   </section>
 
   <section id="screen-results" class="hidden">
     <div class="card">
       <div class="row wrap">
-        <div class="grow"><label>Conference</label><select id="resultsSectionFilter"><option value="All">All</option><option value="Probit Conference">Probit Conference</option><option value="ARIMA Conference">ARIMA Conference</option><option value="Playoffs">Playoffs</option></select></div>
+        <div class="grow"><label>Games</label><select id="resultsSectionFilter"><option value="All">All Games</option><option value="group">Regular Season</option><option value="playoff">Playoffs</option></select></div>
         <button id="exportAllResultsBtn" class="soft">Export Results CSV</button>
       </div>
     </div>
@@ -134,7 +127,7 @@ button.secondary{background:#475569} button.good{background:var(--green)} button
   <section id="screen-players" class="hidden">
     <div class="card">
       <div class="grid2">
-        <div><label>Conference</label><select id="playersSectionFilter"><option value="All">All</option><option value="Probit Conference">Probit Conference</option><option value="ARIMA Conference">ARIMA Conference</option></select></div>
+        <div><label>League</label><div class="pill" style="padding:12px;display:block">All 12 teams</div></div>
         <div><label>Team</label><select id="playersTeamFilter"><option value="All">All</option></select></div>
       </div>
       <div class="grid2" style="margin-top:8px">
@@ -150,14 +143,14 @@ button.secondary{background:#475569} button.good{background:var(--green)} button
   </section>
 
   <section id="screen-playoffs" class="hidden">
-    <div class="card"><div class="hint">Complete the group stage whenever you want. The top four teams in each conference qualify. The next game number becomes the first playoff game automatically, using the playoff format you selected.</div></div>
+    <div class="card"><div class="hint">Complete the group stage whenever you want. The top four teams in the overall standings enter the semifinals (#1 vs #4 and #2 vs #3). The winners meet in Econo Bowl III.</div></div>
     <div id="playoffsWrap"></div>
   </section>
 
   <section id="screen-presentation" class="hidden">
     <div class="card">
       <div class="grid2">
-        <div><label>Standings Conference</label><select id="presentationSectionFilter"><option value="Probit Conference">Probit Conference</option><option value="ARIMA Conference">ARIMA Conference</option></select></div>
+        <div><label>Standings</label><div class="pill" style="padding:12px;display:block">Overall league</div></div>
         <div><label>View</label><select id="presentationViewFilter"><option value="live">Live Game + Standings</option><option value="standings">Standings Only</option><option value="results">Recent Results</option></select></div>
       </div>
     </div>
@@ -178,11 +171,8 @@ button.secondary{background:#475569} button.good{background:var(--green)} button
 
 <script>
 (() => {
-const APP_VERSION = "LL3-2026-09-28a";
-const SECTIONS = {
-  "Probit Conference": { teams: ["The IV League","InshaAllah Offense","Johnny Football","The Stochastics","Dickey Fullers","Big Data Energy"], championship: "Probit Conference Championship" },
-  "ARIMA Conference": { teams: ["The Standard Errors","The Shepherds","Tobit Tabahi","Minimum Likelihood","Meow Meow","The Wolves"], championship: "ARIMA Conference Championship" }
-};
+const APP_VERSION = "LL3-2026-11-18a";
+
 const ROSTERS = {
   "The IV League":["Usman Shakeel","Muhammad Ali Nabeel","Haris Navaid","Ruqaia Wajid Peracha"],
   "InshaAllah Offense":["Fiza Ashar","Jazim Ali","Qutab Muhammad","Zainab Asad"],
@@ -220,10 +210,24 @@ function migrateLegacyTeamNames(s){
   return JSON.parse(json);
 }
 
+function migrateLeagueStructure(s){
+  s = migrateLegacyTeamNames(s || {});
+  for(const g of Object.values(s.games || {})){
+    if(g && g.stage === "group") g.section = "League";
+  }
+  for(const r of (s.results || [])){
+    if(r && r.category === "group"){
+      r.section = "League";
+      r.label = "Regular Season";
+    }
+  }
+  return s;
+}
+
 function loadState(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    const s = migrateLegacyTeamNames(raw ? JSON.parse(raw) : {});
+    const s = migrateLeagueStructure(raw ? JSON.parse(raw) : {});
     s.current ??= null; s.games ??= {}; s.results ??= []; s.gameIndex ??= {};
     s.ui ??= {screen:"match", teamView:"A", minusMode:false};
     s.playoffStart ??= null;
@@ -323,7 +327,7 @@ async function recoverNewerStateFromIDB(){
 }
 
 function normalizeState(s){
-  s = migrateLegacyTeamNames(s || {});
+  s = migrateLeagueStructure(s || {});
   s.current ??= null; s.games ??= {}; s.results ??= []; s.gameIndex ??= {};
   s.ui ??= {screen:"match", teamView:"A", minusMode:false};
   s.playoffStart ??= null;
@@ -359,8 +363,7 @@ function importLeagueBackup(file){
 }
 
 function getSection(team){
-  for(const [k,v] of Object.entries(SECTIONS)) if(v.teams.includes(team)) return k;
-  return "Playoffs";
+  return Object.prototype.hasOwnProperty.call(ROSTERS, team) ? "League" : "Playoffs";
 }
 function setGameNo(n){ $("gameNo").value = String(Math.max(1, Number(n || 1))); }
 function currentGameNo(){ return Math.max(1, Number($("gameNo").value || 1)); }
@@ -387,48 +390,37 @@ function allTeams(){ return Object.keys(ROSTERS).sort((a,b) => a.localeCompare(b
 function teamOptions(teams, selected=""){
   return ['<option value="">Select</option>'].concat(teams.map(t => `<option value="${esc(t)}"${t === selected ? ' selected' : ''}>${esc(t)}</option>`)).join("");
 }
-function teamsHavePlayed(a, b, excludeGameId=null){
-  return state.results.some(r => r.category === "group" && r.gameId !== excludeGameId && ((r.teamA === a && r.teamB === b) || (r.teamA === b && r.teamB === a)));
+function priorMatchups(a, b, excludeGameId=null){
+  if(!a || !b || a === b) return [];
+  return state.results.filter(r =>
+    r.category === "group" && r.gameId !== excludeGameId &&
+    ((r.teamA === a && r.teamB === b) || (r.teamA === b && r.teamB === a))
+  ).sort((x,y) => x.gameNo - y.gameNo);
 }
-function eligibleGroupOpponents(team, excludeGameId=null){
-  const section = getSection(team);
-  const conferenceTeams = SECTIONS[section]?.teams || [];
-  return conferenceTeams.filter(t => t !== team && !teamsHavePlayed(team, t, excludeGameId)).sort((a,b) => a.localeCompare(b));
+function rematchSummary(matches){
+  return matches.map(r => `Game ${r.gameNo}: ${r.teamA} ${r.scoreA}–${r.scoreB} ${r.teamB}`).join("; ");
 }
-function currentGroupGameIdForPair(a, b){
-  if(!a || !b) return null;
-  const gid = state.gameIndex[String(currentGameNo())];
-  const g = gid && state.games[gid];
-  if(!g || g.stage !== "group") return null;
-  return ((g.teamA === a && g.teamB === b) || (g.teamA === b && g.teamB === a)) ? gid : null;
+function updateRematchNotice(){
+  const notice = $("rematchNotice");
+  const a = $("teamA").value, b = $("teamB").value;
+  const currentId = state.games[state.current]?.gameNo === currentGameNo() ? state.current : null;
+  const past = priorMatchups(a, b, currentId);
+  notice.classList.toggle("hidden", !past.length);
+  notice.textContent = past.length ? `Previous meeting${past.length > 1 ? "s" : ""}: ${rematchSummary(past)}. Rematches are allowed.` : "";
 }
 function setMatchSelections(a="", b="", stage="group", excludeGameId=null){
   const teams = allTeams();
-  if(stage === "playoff"){
-    $("teamA").innerHTML = teamOptions(teams, a);
-    $("teamB").innerHTML = teamOptions(teams, b);
-    return;
-  }
-  const exempt = excludeGameId || currentGroupGameIdForPair(a, b);
-  const aTeams = b ? eligibleGroupOpponents(b, exempt) : teams;
-  const bTeams = a ? eligibleGroupOpponents(a, exempt) : teams;
-  $("teamA").innerHTML = teamOptions(aTeams, a);
-  $("teamB").innerHTML = teamOptions(bTeams, b);
+  $("teamA").innerHTML = teamOptions(stage === "playoff" ? teams : teams.filter(t => t !== b), a);
+  $("teamB").innerHTML = teamOptions(stage === "playoff" ? teams : teams.filter(t => t !== a), b);
+  updateRematchNotice();
 }
 function filterOpponentDropdown(sourceSide){
   const source = sourceSide === "A" ? $("teamA") : $("teamB");
   const other = sourceSide === "A" ? $("teamB") : $("teamA");
-  const sourceTeam = source.value;
-  const currentOther = other.value;
-  if(!sourceTeam){
-    other.innerHTML = teamOptions(allTeams(), currentOther);
-    return;
-  }
-  const a = sourceSide === "A" ? sourceTeam : currentOther;
-  const b = sourceSide === "A" ? currentOther : sourceTeam;
-  const exempt = currentGroupGameIdForPair(a, b);
-  const eligible = eligibleGroupOpponents(sourceTeam, exempt);
-  other.innerHTML = teamOptions(eligible, eligible.includes(currentOther) ? currentOther : "");
+  const otherTeam = other.value;
+  const available = allTeams().filter(t => t !== source.value);
+  other.innerHTML = teamOptions(available, available.includes(otherTeam) ? otherTeam : "");
+  updateRematchNotice();
 }
 function fillDropdowns(){
   const teams = allTeams();
@@ -437,11 +429,11 @@ function fillDropdowns(){
   $("playersTeamFilter").innerHTML = ['<option value="All">All</option>'].concat(teams.map(t => `<option value="${esc(t)}">${esc(t)}</option>`)).join("");
 }
 
-function standings(section){
+function standings(){
   const rows = {};
-  SECTIONS[section].teams.forEach(t => rows[t] = {team:t, MP:0,W:0,D:0,L:0,TDs:0,TDAgainst:0,TDDiff:0,Pts:0});
+  allTeams().forEach(t => rows[t] = {team:t, MP:0,W:0,D:0,L:0,TDs:0,TDAgainst:0,TDDiff:0,Pts:0});
   for(const r of state.results){
-    if(r.category !== "group" || r.section !== section) continue;
+    if(r.category !== "group") continue;
     const a = rows[r.teamA], b = rows[r.teamB];
     if(!a || !b) continue;
     a.MP++; b.MP++;
@@ -457,9 +449,7 @@ function standings(section){
 
 function playoffPlan(){
   const start = state.playoffStart || (currentGameNo() + 1);
-  const probit = standings("Probit Conference");
-  const arima = standings("ARIMA Conference");
-  const getSeed = (rows, n) => rows[n-1] ? rows[n-1].team : "";
+  const ranked = standings();
   const resultsByGame = Object.fromEntries(state.results.filter(r => r.category === "playoff").map(r => [r.gameNo, r]));
   const winnerOf = n => {
     const r = resultsByGame[n];
@@ -468,40 +458,13 @@ function playoffPlan(){
     if(r.scoreB > r.scoreA) return r.teamB;
     return "";
   };
-  const loserOf = n => {
-    const r = resultsByGame[n];
-    if(!r) return "";
-    if(r.scoreA > r.scoreB) return r.teamB;
-    if(r.scoreB > r.scoreA) return r.teamA;
-    return "";
-  };
-  const p = start;
-  const format = state.playoffFormat || "standard";
-
-  if(format === "qualifier"){
-    return [
-      {gameNo:p+0, round:"Qualifier / Eliminator", label:"Probit Qualifier (1 vs 2)", teamA:getSeed(probit,1), teamB:getSeed(probit,2)},
-      {gameNo:p+1, round:"Qualifier / Eliminator", label:"Probit Eliminator (3 vs 4)", teamA:getSeed(probit,3), teamB:getSeed(probit,4)},
-      {gameNo:p+2, round:"Qualifier / Eliminator", label:"ARIMA Qualifier (1 vs 2)", teamA:getSeed(arima,1), teamB:getSeed(arima,2)},
-      {gameNo:p+3, round:"Qualifier / Eliminator", label:"ARIMA Eliminator (3 vs 4)", teamA:getSeed(arima,3), teamB:getSeed(arima,4)},
-      {gameNo:p+4, round:"Second Qualifier", label:"Probit Second Qualifier", teamA:loserOf(p+0), teamB:winnerOf(p+1)},
-      {gameNo:p+5, round:"Second Qualifier", label:"ARIMA Second Qualifier", teamA:loserOf(p+2), teamB:winnerOf(p+3)},
-      {gameNo:p+6, round:"Conference Championship", label:"Probit Conference Championship", teamA:winnerOf(p+0), teamB:winnerOf(p+4)},
-      {gameNo:p+7, round:"Conference Championship", label:"ARIMA Conference Championship", teamA:winnerOf(p+2), teamB:winnerOf(p+5)},
-      {gameNo:p+8, round:"Econo Bowl III", label:"Econo Bowl III", teamA:winnerOf(p+6), teamB:winnerOf(p+7)}
-    ];
-  }
-
   return [
-    {gameNo:p+0, round:"Conference Semifinals", label:"Probit Semifinal 1 (1 vs 4)", teamA:getSeed(probit,1), teamB:getSeed(probit,4)},
-    {gameNo:p+1, round:"Conference Semifinals", label:"Probit Semifinal 2 (2 vs 3)", teamA:getSeed(probit,2), teamB:getSeed(probit,3)},
-    {gameNo:p+2, round:"Conference Semifinals", label:"ARIMA Semifinal 1 (1 vs 4)", teamA:getSeed(arima,1), teamB:getSeed(arima,4)},
-    {gameNo:p+3, round:"Conference Semifinals", label:"ARIMA Semifinal 2 (2 vs 3)", teamA:getSeed(arima,2), teamB:getSeed(arima,3)},
-    {gameNo:p+4, round:"Conference Championship", label:"Probit Conference Championship", teamA:winnerOf(p+0), teamB:winnerOf(p+1)},
-    {gameNo:p+5, round:"Conference Championship", label:"ARIMA Conference Championship", teamA:winnerOf(p+2), teamB:winnerOf(p+3)},
-    {gameNo:p+6, round:"Econo Bowl III", label:"Econo Bowl III", teamA:winnerOf(p+4), teamB:winnerOf(p+5)}
+    {gameNo:start, round:"Semifinals", label:"Semifinal 1 (1 vs 4)", teamA:ranked[0]?.team || "", teamB:ranked[3]?.team || ""},
+    {gameNo:start+1, round:"Semifinals", label:"Semifinal 2 (2 vs 3)", teamA:ranked[1]?.team || "", teamB:ranked[2]?.team || ""},
+    {gameNo:start+2, round:"Econo Bowl III", label:"Econo Bowl III", teamA:winnerOf(start), teamB:winnerOf(start+1)}
   ];
 }
+
 function playoffGameFor(n){ return playoffPlan().find(x => x.gameNo === n) || null; }
 
 function loadAutoPlayoffGame(n){
@@ -546,9 +509,8 @@ function loadGame(){
   const a = $("teamA").value, b = $("teamB").value;
   if(!a || !b) return alert("Select both team names.");
   if(a === b) return alert("Team A and Team B must be different.");
-  if(getSection(a) !== getSection(b)) return alert("Regular-season matches must be within the same conference.");
-  const exempt = currentGroupGameIdForPair(a, b);
-  if(teamsHavePlayed(a, b, exempt)) return alert("These teams have already played each other and cannot play again in the group stage.");
+  const past = priorMatchups(a, b);
+  if(past.length && !confirm(`These teams have already played: ${rematchSummary(past)}. Start a rematch?`)) return;
   const id = gameId(n, a, b);
   ensureGame(id, n, a, b, "group", null);
   state.current = id;
@@ -608,14 +570,14 @@ function resultText(r){
 }
 
 function renderStandings(){
-  const rows = standings($("standingsSectionFilter").value);
-  $("standingsWrap").innerHTML = rows.map((r,i) => `<div class="item"><div class="meta">#${i+1}</div><div class="big">${esc(r.team)}</div><div class="stats"><span><b>Pts</b> ${r.Pts}</span><span><b>MP</b> ${r.MP}</span><span><b>W</b> ${r.W}</span><span><b>D</b> ${r.D}</span><span><b>L</b> ${r.L}</span><span><b>TD Diff</b> ${r.TDDiff}</span><span><b>TD For</b> ${r.TDs}</span><span><b>TD Against</b> ${r.TDAgainst}</span></div></div>`).join("");
+  const rows = standings();
+  $("standingsWrap").innerHTML = rows.map((r,i) => `<div class="item" style="${i < 4 ? 'background:#dcfce7' : ''}"><div class="meta">#${i+1}${i < 4 ? ' · Semifinal qualifier' : ''}</div><div class="big">${esc(r.team)}</div><div class="stats"><span><b>Pts</b> ${r.Pts}</span><span><b>MP</b> ${r.MP}</span><span><b>W</b> ${r.W}</span><span><b>D</b> ${r.D}</span><span><b>L</b> ${r.L}</span><span><b>TD Diff</b> ${r.TDDiff}</span><span><b>TD For</b> ${r.TDs}</span><span><b>TD Against</b> ${r.TDAgainst}</span></div></div>`).join("");
 }
 
 function renderResults(){
   const filter = $("resultsSectionFilter").value;
-  const rows = state.results.filter(r => filter === "All" ? true : (filter === "Playoffs" ? r.category === "playoff" : (r.category === "group" && r.section === filter))).sort((a,b) => a.gameNo - b.gameNo);
-  $("resultsWrap").innerHTML = rows.length ? rows.map(r => `<div class="item"><div class="row space"><div><b>Game ${r.gameNo}</b> · ${esc(r.category === "group" ? r.section : (r.label || "Playoff"))}</div><button class="soft" data-open-game="${r.gameId}">Open</button></div><div class="big" style="margin-top:8px">${esc(r.teamA)} ${r.scoreA} – ${r.scoreB} ${esc(r.teamB)}</div><div class="meta" style="margin-top:4px">${esc(resultText(r))}</div></div>`).join("") : '<div class="card empty">No saved results yet.</div>';
+  const rows = state.results.filter(r => filter === "All" || r.category === filter).sort((a,b) => a.gameNo - b.gameNo);
+  $("resultsWrap").innerHTML = rows.length ? rows.map(r => `<div class="item"><div class="row space"><div><b>Game ${r.gameNo}</b> · ${esc(r.category === "group" ? "Regular Season" : (r.label || "Playoff"))}</div><button class="soft" data-open-game="${r.gameId}">Open</button></div><div class="big" style="margin-top:8px">${esc(r.teamA)} ${r.scoreA} – ${r.scoreB} ${esc(r.teamB)}</div><div class="meta" style="margin-top:4px">${esc(resultText(r))}</div></div>`).join("") : '<div class="card empty">No saved results yet.</div>';
 }
 
 function ratio(c,d){ return d === 0 ? (c === 0 ? "0.00" : "∞") : (Math.round((c/d) * 100) / 100).toFixed(2); }
@@ -653,21 +615,19 @@ function comparePlayers(a,b,key){
   return ((b[key] - a[key]) || a.player.localeCompare(b.player));
 }
 function renderPlayers(){
-  const sf = $("playersSectionFilter").value, tf = $("playersTeamFilter").value, stf = $("playersStageFilter").value, sk = $("playersSortFilter").value;
-  let rows = playerStats(stf).filter(r => (sf === "All" || r.section === sf) && (tf === "All" || r.team === tf));
+  const tf = $("playersTeamFilter").value, stf = $("playersStageFilter").value, sk = $("playersSortFilter").value;
+  let rows = playerStats(stf).filter(r => (tf === "All" || r.team === tf));
   rows.sort((a,b) => comparePlayers(a,b,sk));
-  $("playersWrap").innerHTML = rows.length ? rows.map(r => `<div class="item"><div class="big">${esc(r.player)}</div><div class="meta">${esc(r.team)} · ${esc(r.section)}</div><div class="stats"><span><b>GP</b> ${r.gamesPlayed}</span><span><b>DNP</b> ${r.dnpGames}</span><span><b>C</b> ${r.catches}</span><span><b>D</b> ${r.drops}</span><span><b>T</b> ${r.touchdowns}</span><span><b>I</b> ${r.interceptions}</span><span><b>B</b> ${r.blocks}</span><span><b>C/G</b> ${r.catchesPG}</span><span><b>D/G</b> ${r.dropsPG}</span><span><b>T/G</b> ${r.touchdownsPG}</span><span><b>I/G</b> ${r.interceptionsPG}</span><span><b>B/G</b> ${r.blocksPG}</span><span><b>C:D</b> ${r.catchDropRatio}</span></div></div>`).join("") : '<div class="card empty">No player stats yet.</div>';
+  $("playersWrap").innerHTML = rows.length ? rows.map(r => `<div class="item"><div class="big">${esc(r.player)}</div><div class="meta">${esc(r.team)}</div><div class="stats"><span><b>GP</b> ${r.gamesPlayed}</span><span><b>DNP</b> ${r.dnpGames}</span><span><b>C</b> ${r.catches}</span><span><b>D</b> ${r.drops}</span><span><b>T</b> ${r.touchdowns}</span><span><b>I</b> ${r.interceptions}</span><span><b>B</b> ${r.blocks}</span><span><b>C/G</b> ${r.catchesPG}</span><span><b>D/G</b> ${r.dropsPG}</span><span><b>T/G</b> ${r.touchdownsPG}</span><span><b>I/G</b> ${r.interceptionsPG}</span><span><b>B/G</b> ${r.blocksPG}</span><span><b>C:D</b> ${r.catchDropRatio}</span></div></div>`).join("") : '<div class="card empty">No player stats yet.</div>';
 }
 
 function renderPlayoffs(){
   const rows = playoffPlan();
   const projected = !state.playoffStart;
-  const format = state.playoffFormat || "standard";
-  const formatName = format === "qualifier" ? "Qualifier / Eliminator" : "Standard Semifinals";
-  const roundOrder = format === "qualifier"
-    ? ["Qualifier / Eliminator","Second Qualifier","Conference Championship","Econo Bowl III"]
-    : ["Conference Semifinals","Conference Championship","Econo Bowl III"];
-  $("playoffsWrap").innerHTML = (projected ? `<div class="card"><div class="hint">Projected ${esc(formatName)} bracket if you completed the group stage right now. Game numbers would start from the next game.</div></div>` : `<div class="card"><div class="hint">Playoff format: ${esc(formatName)}</div></div>`) +
+  const roundOrder = ["Semifinals","Econo Bowl III"];
+  $("playoffsWrap").innerHTML = (projected
+    ? '<div class="card"><div class="hint">Projected top-four bracket if you completed the group stage now. The first playoff game will use the next game number.</div></div>'
+    : '<div class="card"><div class="hint">Top four seeded into the semifinals. Semifinal winners advance to Econo Bowl III.</div></div>') +
     roundOrder.map(round => {
       const subset = rows.filter(r => r.round === round);
       if(!subset.length) return "";
@@ -678,12 +638,13 @@ function renderPlayoffs(){
       }).join('')}</div>`;
     }).join('');
 }
+
 function renderHeader(){
   const g = currentGame();
   if(!g){
     $("scoreLabelA").textContent = "Team A"; $("scoreLabelB").textContent = "Team B";
     $("scoreAValue").textContent = "0"; $("scoreBValue").textContent = "0";
-    $("currentStagePill").textContent = state.playoffStart ? "Playoffs" : "Group Stage";
+    $("currentStagePill").textContent = state.playoffStart ? "Playoffs" : "Regular Season";
     $("walkoverStatus").textContent = "";
     $("teamTabA").textContent = "Team A"; $("teamTabB").textContent = "Team B";
     $("walkoverSelect").value = "none";
@@ -696,7 +657,7 @@ function renderHeader(){
   $("scoreLabelA").textContent = g.teamA || "TBD"; $("scoreLabelB").textContent = g.teamB || "TBD";
   $("teamTabA").textContent = g.teamA || "Team A"; $("teamTabB").textContent = g.teamB || "Team B";
   $("scoreAValue").textContent = s.scoreA; $("scoreBValue").textContent = s.scoreB;
-  $("currentStagePill").textContent = g.stage === "group" ? g.section : (g.stageMeta?.label || "Playoff");
+  $("currentStagePill").textContent = g.stage === "group" ? "Regular Season" : (g.stageMeta?.label || "Playoff");
   $("walkoverStatus").textContent = g.walkover === "A" ? `${g.teamA} wins by walkover (2–0)` : (g.walkover === "B" ? `${g.teamB} wins by walkover (2–0)` : "");
 }
 function renderScreen(){
@@ -709,11 +670,6 @@ function renderScreen(){
 function updateCompleteButton(){
   const btn = $("completeLeagueBtn");
   if(!btn) return;
-  const formatSelect = $("playoffFormatSelect");
-  if(formatSelect){
-    formatSelect.value = state.playoffFormat || "standard";
-    formatSelect.disabled = !!state.playoffStart;
-  }
   if(state.playoffStart){
     btn.textContent = "Undo Group Stage Completion";
     btn.className = "secondary grow";
@@ -722,9 +678,9 @@ function updateCompleteButton(){
     btn.className = "warn grow";
   }
 }
+
 function renderPresentation(){
-  const sec = $("presentationSectionFilter") ? $("presentationSectionFilter").value : "Probit Conference";
-  const view = $("presentationViewFilter") ? $("presentationViewFilter").value : "live";
+  const view = $("presentationViewFilter").value;
   const g = currentGame();
   const s = g ? getScores(g) : {scoreA:0, scoreB:0};
   let out = "";
@@ -747,20 +703,20 @@ function renderPresentation(){
       </div>`;
     }
     out += `<div class="item">
-      <div class="big">${esc(sec)} Standings</div>
+      <div class="big">Overall League Standings</div>
       <div style="margin-top:8px">
-        <div style="display:grid;grid-template-columns:1.6fr .6fr .6fr .6fr .9fr;font-weight:800;font-size:13px;color:#475569;border-bottom:1px solid #e2e8f0;padding:4px 0">
+        <div style="display:grid;grid-template-columns:minmax(0,1.8fr) repeat(3,minmax(0,.55fr)) minmax(0,.8fr);font-weight:800;font-size:12px;color:#475569;border-bottom:1px solid #e2e8f0;padding:4px 0">
           <div>Team</div><div style="text-align:center">Pts</div><div style="text-align:center">MP</div><div style="text-align:center">W</div><div style="text-align:center">TD Diff</div>
         </div>
-        ${standings(sec).map((r,i)=>{
-          const bg = i < 2 ? '#dcfce7' : (i < 4 ? '#dbeafe' : '#fee2e2');
+        ${standings().map((r,i)=>{
+          const bg = i < 4 ? '#dcfce7' : '#f8fafc';
           const tdDiff = r.TDDiff > 0 ? `+${r.TDDiff}` : `${r.TDDiff}`;
-          return `<div style="background:${bg};display:grid;grid-template-columns:1.6fr .6fr .6fr .6fr .9fr;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9">
-            <div style="font-weight:700;font-size:15px">#${i+1} ${esc(r.team)}</div>
-            <div style="text-align:center;font-size:20px;font-weight:800">${r.Pts}</div>
-            <div style="text-align:center;font-size:20px;font-weight:800">${r.MP}</div>
-            <div style="text-align:center;font-size:20px;font-weight:800">${r.W}</div>
-            <div style="text-align:center;font-size:20px;font-weight:800">${tdDiff}</div>
+          return `<div style="background:${bg};display:grid;grid-template-columns:minmax(0,1.8fr) repeat(3,minmax(0,.55fr)) minmax(0,.8fr);align-items:center;padding:8px 2px;border-bottom:1px solid #e2e8f0">
+            <div style="font-weight:700;font-size:13px;overflow-wrap:anywhere">#${i+1} ${esc(r.team)}</div>
+            <div style="text-align:center;font-size:18px;font-weight:800">${r.Pts}</div>
+            <div style="text-align:center;font-size:18px;font-weight:800">${r.MP}</div>
+            <div style="text-align:center;font-size:18px;font-weight:800">${r.W}</div>
+            <div style="text-align:center;font-size:18px;font-weight:800">${tdDiff}</div>
           </div>`;
         }).join("")}
       </div>
@@ -768,12 +724,11 @@ function renderPresentation(){
   } else {
     out += `<div class="item"><div class="big">Recent Results</div>${
       state.results.slice().sort((a,b)=>b.gameNo-a.gameNo).slice(0,8).map(r=>`<div class="match">
-        <div><b>Game ${r.gameNo}</b> · ${esc(r.label || r.section)}</div>
+        <div><b>Game ${r.gameNo}</b> · ${esc(r.category === "group" ? "Regular Season" : (r.label || "Playoff"))}</div>
         <div style="margin-top:4px">${esc(r.teamA)} ${r.scoreA} – ${r.scoreB} ${esc(r.teamB)}</div>
       </div>`).join("")
     }</div>`;
   }
-
   $("presentationWrap").innerHTML = out;
 }
 
@@ -799,7 +754,7 @@ function saveResult(){
   if(!g) return alert("Load a game first.");
   if(!g.teamA || !g.teamB) return alert("This playoff matchup is waiting for earlier winners.");
   const s = getScores(g);
-  const rec = {gameId:state.current, gameNo:g.gameNo, category:g.stage === "group" ? "group" : "playoff", section:g.stage === "group" ? g.section : "Playoffs", label:g.stage === "playoff" ? (g.stageMeta?.label || "Playoff") : g.section, teamA:g.teamA, teamB:g.teamB, scoreA:s.scoreA, scoreB:s.scoreB, walkover:g.walkover || "none"};
+  const rec = {gameId:state.current, gameNo:g.gameNo, category:g.stage === "group" ? "group" : "playoff", section:g.stage === "group" ? "League" : "Playoffs", label:g.stage === "playoff" ? (g.stageMeta?.label || "Playoff") : "Regular Season", teamA:g.teamA, teamB:g.teamB, scoreA:s.scoreA, scoreB:s.scoreB, walkover:g.walkover || "none"};
   const i = state.results.findIndex(r => r.gameId === state.current);
   if(i >= 0) state.results[i] = rec; else state.results.push(rec);
   state.gameIndex[String(g.gameNo)] = state.current;
@@ -839,7 +794,6 @@ function completeGroupStage(){
     return;
   }
 
-  state.playoffFormat = $("playoffFormatSelect").value || state.playoffFormat || "standard";
   state.playoffStart = currentGameNo() + 1;
   loadAutoPlayoffGame(state.playoffStart);
   state.ui.screen = 'playoffs';
@@ -916,7 +870,6 @@ $("swapBtn").onclick = () => {
 };
 $("saveResultBtn").onclick = saveResult;
 $("completeLeagueBtn").onclick = completeGroupStage;
-$("playoffFormatSelect").onchange = () => { if(state.playoffStart) return; state.playoffFormat = $("playoffFormatSelect").value; renderPlayoffs(); dirty(); };
 $("walkoverSelect").onchange = () => { const g = currentGame(); if(!g) return; g.walkover = $("walkoverSelect").value; vibrate(8); render(); dirty(); };
 
 $("exportCurrentBtn").onclick = () => {
@@ -925,7 +878,7 @@ $("exportCurrentBtn").onclick = () => {
   for(const t of [g.teamA, g.teamB]){
     for(const p of (ROSTERS[t] || [])){
       const s = g.players[p] || blankStats();
-      lines.push([g.gameNo, csv(g.stage), csv(g.stageMeta?.label || g.section), csv(g.walkover || "none"), csv(t), csv(p), s.dnp ? "Yes" : "No", s.catches, s.drops, s.touchdowns, s.interceptions, s.blocks].join(","));
+      lines.push([g.gameNo, csv(g.stage), csv(g.stage === "group" ? "Regular Season" : (g.stageMeta?.label || g.section)), csv(g.walkover || "none"), csv(t), csv(p), s.dnp ? "Yes" : "No", s.catches, s.drops, s.touchdowns, s.interceptions, s.blocks].join(","));
     }
   }
   downloadCSV(lines.join("\n"), `game_${g.gameNo}.csv`);
@@ -933,7 +886,7 @@ $("exportCurrentBtn").onclick = () => {
 
 $("exportAllResultsBtn").onclick = () => {
   const lines = [["GameNo","Category","Label","TeamA","ScoreA","TeamB","ScoreB","Walkover","Result"].join(",")];
-  state.results.slice().sort((a,b) => a.gameNo - b.gameNo).forEach(r => lines.push([r.gameNo, csv(r.category), csv(r.label || ""), csv(r.teamA), r.scoreA, csv(r.teamB), r.scoreB, csv(r.walkover || "none"), csv(resultText(r))].join(",")));
+  state.results.slice().sort((a,b) => a.gameNo - b.gameNo).forEach(r => lines.push([r.gameNo, csv(r.category), csv(r.category === "group" ? "Regular Season" : (r.label || "")), csv(r.teamA), r.scoreA, csv(r.teamB), r.scoreB, csv(r.walkover || "none"), csv(resultText(r))].join(",")));
   downloadCSV(lines.join("\n"), "all_results.csv");
 };
 
@@ -946,11 +899,11 @@ $("importLeagueInput").onchange = e => {
 };
 
 $("exportPlayerStatsBtn").onclick = () => {
-  const sf = $("playersSectionFilter").value, tf = $("playersTeamFilter").value, stf = $("playersStageFilter").value, sk = $("playersSortFilter").value;
-  let rows = playerStats(stf).filter(r => (sf === "All" || r.section === sf) && (tf === "All" || r.team === tf));
+  const tf = $("playersTeamFilter").value, stf = $("playersStageFilter").value, sk = $("playersSortFilter").value;
+  let rows = playerStats(stf).filter(r => (tf === "All" || r.team === tf));
   rows.sort((a,b) => comparePlayers(a,b,sk));
-  const lines = [["Player","Team","Conference","GP","DNP","Catches","Drops","Touchdowns","Interceptions","Blocks","C_per_Game","D_per_Game","TD_per_Game","INT_per_Game","BLK_per_Game","Catch_to_Drop_Ratio"].join(",")];
-  rows.forEach(r => lines.push([csv(r.player), csv(r.team), csv(r.section), r.gamesPlayed, r.dnpGames, r.catches, r.drops, r.touchdowns, r.interceptions, r.blocks, r.catchesPG, r.dropsPG, r.touchdownsPG, r.interceptionsPG, r.blocksPG, csv(r.catchDropRatio)].join(",")));
+  const lines = [["Player","Team","GP","DNP","Catches","Drops","Touchdowns","Interceptions","Blocks","C_per_Game","D_per_Game","TD_per_Game","INT_per_Game","BLK_per_Game","Catch_to_Drop_Ratio"].join(",")];
+  rows.forEach(r => lines.push([csv(r.player), csv(r.team), r.gamesPlayed, r.dnpGames, r.catches, r.drops, r.touchdowns, r.interceptions, r.blocks, r.catchesPG, r.dropsPG, r.touchdownsPG, r.interceptionsPG, r.blocksPG, csv(r.catchDropRatio)].join(",")));
   downloadCSV(lines.join("\n"), "player_stats.csv");
 };
 
@@ -966,13 +919,10 @@ $("resetBtn").onclick = () => {
   vibrate([15,20,15]); render(); dirty();
 };
 
-$("standingsSectionFilter").onchange = renderStandings;
 $("resultsSectionFilter").onchange = renderResults;
-$("playersSectionFilter").onchange = renderPlayers;
 $("playersTeamFilter").onchange = renderPlayers;
 $("playersSortFilter").onchange = renderPlayers;
 $("playersStageFilter").onchange = renderPlayers;
-$("presentationSectionFilter").onchange = renderPresentation;
 $("presentationViewFilter").onchange = renderPresentation;
 
 fillDropdowns();
