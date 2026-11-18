@@ -171,7 +171,7 @@ button.secondary{background:#475569} button.good{background:var(--green)} button
 
 <script>
 (() => {
-const APP_VERSION = "LL3-2026-11-18a";
+const APP_VERSION = "LL3-2026-11-18b";
 
 const ROSTERS = {
   "The IV League":["Usman Shakeel","Muhammad Ali Nabeel","Haris Navaid","Ruqaia Wajid Peracha"],
@@ -190,7 +190,6 @@ const ROSTERS = {
 const STATS = ["catches","drops","touchdowns","interceptions","blocks"];
 const STORAGE_KEY = "leaf_league_iii_mobile_v1";
 const $ = id => document.getElementById(id);
-let state = loadState();
 
 function vibrate(ms=10){ try { if (navigator.vibrate) navigator.vibrate(ms); } catch(e) {} }
 function blankStats(){ return {catches:0,drops:0,touchdowns:0,interceptions:0,blocks:0,dnp:false,history:[]}; }
@@ -334,6 +333,8 @@ function normalizeState(s){
   s.playoffFormat ??= "standard";
   return s;
 }
+
+let state = loadState();
 
 function exportLeagueBackup(){
   const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json;charset=utf-8"});
